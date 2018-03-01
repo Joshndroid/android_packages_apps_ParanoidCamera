@@ -21,6 +21,7 @@ import android.animation.Animator.AnimatorListener;
 import android.content.Context;
 import android.content.res.Resources;
 import android.content.SharedPreferences;
+import android.graphics.Point;
 import android.graphics.Rect;
 import android.preference.PreferenceManager;
 import android.util.Log;
@@ -43,7 +44,7 @@ import com.android.camera.ui.ListMenu;
 import com.android.camera.ui.TimeIntervalPopup;
 import com.android.camera.ui.RotateImageView;
 import com.android.camera.ui.RotateTextToast;
-import org.codeaurora.snapcam.R;
+import co.paranoidandroid.camera.R;
 import android.widget.HorizontalScrollView;
 import android.widget.Toast;
 import android.view.ViewGroup;
@@ -52,6 +53,7 @@ import android.view.Display;
 import com.android.camera.ui.RotateLayout;
 import com.android.camera.util.CameraUtil;
 import android.text.TextUtils;
+
 import java.util.Locale;
 
 public class VideoMenu extends MenuController
@@ -80,6 +82,7 @@ public class VideoMenu extends MenuController
     private int mSceneStatus;
     private View mFrontBackSwitcher;
     private View mFilterModeSwitcher;
+    private View mGridSwitcher;
     private int mPopupStatus;
     private int mPreviewMenuStatus;
     private CameraActivity mActivity;
@@ -99,6 +102,7 @@ public class VideoMenu extends MenuController
         mActivity = activity;
         mFrontBackSwitcher = ui.getRootView().findViewById(R.id.front_back_switcher);
         mFilterModeSwitcher = ui.getRootView().findViewById(R.id.filter_mode_switcher);
+        mGridSwitcher = ui.getRootView().findViewById(R.id.grid_switcher);
     }
 
     public void initialize(PreferenceGroup group) {
@@ -107,9 +111,13 @@ public class VideoMenu extends MenuController
         mListSubMenu = null;
         mPopupStatus = POPUP_NONE;
         mPreviewMenuStatus = POPUP_NONE;
+
         initFilterModeButton(mFilterModeSwitcher);
+        initSwitchItem(CameraSettings.KEY_CAMERA_ID, mFrontBackSwitcher);
+        initSwitchItem(CameraSettings.KEY_GRID, mGridSwitcher);
+
         // settings popup
-        mOtherKeys1 = new String[] {
+        mOtherKeys1 = new String[]{
                 CameraSettings.KEY_VIDEOCAMERA_FLASH_MODE,
                 CameraSettings.KEY_VIDEO_QUALITY,
                 CameraSettings.KEY_VIDEO_DURATION,
@@ -119,7 +127,8 @@ public class VideoMenu extends MenuController
                 CameraSettings.KEY_VIDEO_HIGH_FRAME_RATE,
                 CameraSettings.KEY_DIS
         };
-        mOtherKeys2 = new String[] {
+
+        mOtherKeys2 = new String[]{
                 CameraSettings.KEY_VIDEOCAMERA_FLASH_MODE,
                 CameraSettings.KEY_VIDEO_QUALITY,
                 CameraSettings.KEY_VIDEO_DURATION,
@@ -143,7 +152,6 @@ public class VideoMenu extends MenuController
                 CameraSettings.KEY_VIDEO_SNAPSHOT_SIZE,
                 CameraSettings.KEY_ZOOM
         };
-        initSwitchItem(CameraSettings.KEY_CAMERA_ID, mFrontBackSwitcher);
     }
 
     public boolean handleBackKey() {
@@ -157,7 +165,7 @@ public class VideoMenu extends MenuController
             animateSlideOut(mListMenu, 1);
         } else if (mPopupStatus == POPUP_SECOND_LEVEL) {
             animateFadeOut(mListSubMenu, 2);
-            ((ListMenu) mListMenu).resetHighlight();
+            mListMenu.resetHighlight();
         }
         return true;
     }
@@ -168,7 +176,7 @@ public class VideoMenu extends MenuController
 
     public void tryToCloseSubList() {
         if (mListMenu != null)
-            ((ListMenu) mListMenu).resetHighlight();
+            mListMenu.resetHighlight();
 
         if (mPopupStatus == POPUP_SECOND_LEVEL) {
             mUI.dismissLevel2();
@@ -200,8 +208,7 @@ public class VideoMenu extends MenuController
                     initializePopup();
                     mPopupStatus = POPUP_NONE;
                     mUI.cleanupListview();
-                }
-                else if (level == 2) {
+                } else if (level == 2) {
                     mUI.dismissLevel2();
                     mPopupStatus = POPUP_FIRST_LEVEL;
                 }
@@ -214,8 +221,7 @@ public class VideoMenu extends MenuController
                     initializePopup();
                     mPopupStatus = POPUP_NONE;
                     mUI.cleanupListview();
-                }
-                else if (level == 2) {
+                } else if (level == 2) {
                     mUI.dismissLevel2();
                     mPopupStatus = POPUP_FIRST_LEVEL;
                 }
@@ -231,37 +237,19 @@ public class VideoMenu extends MenuController
         mPopupStatus = POPUP_IN_ANIMATION_SLIDE;
 
         ViewPropertyAnimator vp = v.animate();
-        if (View.LAYOUT_DIRECTION_RTL == TextUtils
-                .getLayoutDirectionFromLocale(Locale.getDefault())) {
-            switch (mUI.getOrientation()) {
-                case 0:
-                    vp.translationXBy(v.getWidth());
-                    break;
-                case 90:
-                    vp.translationYBy(-2 * v.getHeight());
-                    break;
-                case 180:
-                    vp.translationXBy(-2 * v.getWidth());
-                    break;
-                case 270:
-                    vp.translationYBy(v.getHeight());
-                    break;
-            }
-        } else {
-            switch (mUI.getOrientation()) {
-                case 0:
-                    vp.translationXBy(-v.getWidth());
-                    break;
-                case 90:
-                    vp.translationYBy(2 * v.getHeight());
-                    break;
-                case 180:
-                    vp.translationXBy(2 * v.getWidth());
-                    break;
-                case 270:
-                    vp.translationYBy(-v.getHeight());
-                    break;
-            }
+        switch (mUI.getOrientation()) {
+            case 0:
+                vp.translationXBy(-v.getWidth());
+                break;
+            case 90:
+                vp.translationYBy(2 * v.getHeight());
+                break;
+            case 180:
+                vp.translationXBy(2 * v.getWidth());
+                break;
+            case 270:
+                vp.translationYBy(-v.getHeight());
+                break;
         }
 
         vp.setListener(new AnimatorListener() {
@@ -281,8 +269,7 @@ public class VideoMenu extends MenuController
                     initializePopup();
                     mPopupStatus = POPUP_NONE;
                     mUI.cleanupListview();
-                }
-                else if (level == 2) {
+                } else if (level == 2) {
                     mUI.dismissLevel2();
                     mPopupStatus = POPUP_FIRST_LEVEL;
                 }
@@ -295,8 +282,7 @@ public class VideoMenu extends MenuController
                     initializePopup();
                     mPopupStatus = POPUP_NONE;
                     mUI.cleanupListview();
-                }
-                else if (level == 2) {
+                } else if (level == 2) {
                     mUI.dismissLevel2();
                     mPopupStatus = POPUP_FIRST_LEVEL;
                 }
@@ -319,53 +305,27 @@ public class VideoMenu extends MenuController
 
         ViewPropertyAnimator vp = v.animate();
         float dest;
-        if (View.LAYOUT_DIRECTION_RTL == TextUtils
-                .getLayoutDirectionFromLocale(Locale.getDefault())) {
-            switch (orientation) {
-                case 0:
-                    dest = v.getX();
-                    v.setX(-(dest - delta));
-                    vp.translationX(dest);
-                    break;
-                case 90:
-                    dest = v.getY();
-                    v.setY(-(dest + delta));
-                    vp.translationY(dest);
-                    break;
-                case 180:
-                    dest = v.getX();
-                    v.setX(-(dest + delta));
-                    vp.translationX(dest);
-                    break;
-                case 270:
-                    dest = v.getY();
-                    v.setY(-(dest - delta));
-                    vp.translationY(dest);
-                    break;
-            }
-        } else {
-            switch (orientation) {
-                case 0:
-                    dest = v.getX();
-                    v.setX(dest - delta);
-                    vp.translationX(dest);
-                    break;
-                case 90:
-                    dest = v.getY();
-                    v.setY(dest + delta);
-                    vp.translationY(dest);
-                    break;
-                case 180:
-                    dest = v.getX();
-                    v.setX(dest + delta);
-                    vp.translationX(dest);
-                    break;
-                case 270:
-                    dest = v.getY();
-                    v.setY(dest - delta);
-                    vp.translationY(dest);
-                    break;
-            }
+        switch (orientation) {
+            case 0:
+                dest = v.getX();
+                v.setX(dest - delta);
+                vp.translationX(dest);
+                break;
+            case 90:
+                dest = v.getY();
+                v.setY(dest + delta);
+                vp.translationY(dest);
+                break;
+            case 180:
+                dest = v.getX();
+                v.setX(dest + delta);
+                vp.translationX(dest);
+                break;
+            case 270:
+                dest = v.getY();
+                v.setY(dest - delta);
+                vp.translationY(dest);
+                break;
         }
 
         vp.setDuration(ANIMATION_DURATION).start();
@@ -383,12 +343,7 @@ public class VideoMenu extends MenuController
         mPreviewMenuStatus = PREVIEW_MENU_IN_ANIMATION;
 
         ViewPropertyAnimator vp = v.animate();
-        if (View.LAYOUT_DIRECTION_RTL == TextUtils
-                .getLayoutDirectionFromLocale(Locale.getDefault())) {
-            vp.translationXBy(v.getWidth()).setDuration(ANIMATION_DURATION);
-        } else {
-            vp.translationXBy(-v.getWidth()).setDuration(ANIMATION_DURATION);
-        }
+        vp.translationXBy(-v.getWidth()).setDuration(ANIMATION_DURATION);
         vp.setListener(new AnimatorListener() {
             @Override
             public void onAnimationStart(Animator animation) {
@@ -462,49 +417,6 @@ public class VideoMenu extends MenuController
         return mUI.sendTouchToMenu(ev);
     }
 
-    public void initSwitchItem(final String prefKey, View switcher) {
-        final IconListPreference pref =
-                (IconListPreference) mPreferenceGroup.findPreference(prefKey);
-        if (pref == null)
-            return;
-
-        int[] iconIds = pref.getLargeIconIds();
-        int resid = -1;
-        int index = pref.findIndexOfValue(pref.getValue());
-        if (!pref.getUseSingleIcon() && iconIds != null) {
-            if (index == -1) {
-                return;
-            }
-            // Each entry has a corresponding icon.
-            resid = iconIds[index];
-        } else {
-            // The preference only has a single icon to represent it.
-            resid = pref.getSingleIcon();
-        }
-        ((ImageView) switcher).setImageResource(resid);
-        mPreferences.add(pref);
-        mPreferenceMap.put(pref, switcher);
-        switcher.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                IconListPreference pref = (IconListPreference) mPreferenceGroup
-                        .findPreference(prefKey);
-                if (pref == null)
-                    return;
-                int index = pref.findIndexOfValue(pref.getValue());
-                CharSequence[] values = pref.getEntryValues();
-                index = (index + 1) % values.length;
-                pref.setValueIndex(index);
-                ((ImageView) v).setImageResource(
-                        ((IconListPreference) pref).getLargeIconIds()[index]);
-                if (prefKey.equals(CameraSettings.KEY_CAMERA_ID))
-                    mListener.onCameraPickerClicked(index);
-                reloadPreference(pref);
-                onSettingChanged(pref);
-            }
-        });
-    }
-
     public void initFilterModeButton(View button) {
         button.setVisibility(View.INVISIBLE);
         final IconListPreference pref = (IconListPreference) mPreferenceGroup
@@ -546,7 +458,8 @@ public class VideoMenu extends MenuController
             rotation = (rotation + 90) % 360;
         }
         WindowManager wm = (WindowManager) mActivity.getSystemService(Context.WINDOW_SERVICE);
-        Display display = wm.getDefaultDisplay();
+        Point point = new Point();
+        wm.getDefaultDisplay().getRealSize(point);
         CharSequence[] entries = pref.getEntries();
 
         Resources r = mActivity.getResources();
@@ -588,7 +501,7 @@ public class VideoMenu extends MenuController
             params = new ViewGroup.LayoutParams(LayoutParams.MATCH_PARENT, size);
             previewMenuLayout.setLayoutParams(params);
             ((ViewGroup) mUI.getRootView()).addView(previewMenuLayout);
-            previewMenuLayout.setY(display.getHeight() - size);
+            previewMenuLayout.setY(point.y - size);
         }
         basic.setLayoutParams(new FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT,
                 LayoutParams.MATCH_PARENT));
@@ -640,8 +553,8 @@ public class VideoMenu extends MenuController
     }
 
     private void changeFilterModeControlIcon(String value) {
-        if(!value.equals("")) {
-            if(value.equalsIgnoreCase("none")) {
+        if (!value.equals("")) {
+            if (value.equalsIgnoreCase("none")) {
                 value = "Off";
             } else {
                 value = "On";
@@ -656,7 +569,7 @@ public class VideoMenu extends MenuController
     }
 
     public void openFirstLevel() {
-        if (isMenuBeingShown() || CameraControls.isAnimating())
+        if (isMenuBeingShown())
             return;
         if (mListMenu == null || mPopupStatus != POPUP_FIRST_LEVEL) {
             initializePopup();
@@ -688,13 +601,14 @@ public class VideoMenu extends MenuController
             mListMenu.setPreferenceEnabled(CameraSettings.KEY_RECORD_LOCATION, false);
         }
     }
+
     private void overrideMenuFor4K() {
-        if(mUI.is4KEnabled() && !PERSIST_4K_NO_LIMIT) {
+        if (mUI.is4KEnabled() && !PERSIST_4K_NO_LIMIT) {
 
             mListMenu.setPreferenceEnabled(
-                     CameraSettings.KEY_DIS,false);
+                    CameraSettings.KEY_DIS, false);
             mListMenu.overrideSettings(
-                     CameraSettings.KEY_DIS, "disable");
+                    CameraSettings.KEY_DIS, "disable");
 
             mListMenu.setPreferenceEnabled(
                     CameraSettings.KEY_SEE_MORE, false);
@@ -705,10 +619,10 @@ public class VideoMenu extends MenuController
 
     private void overrideMenuForSeeMore() {
         ListPreference pref_SeeMore = mPreferenceGroup.findPreference(CameraSettings.KEY_SEE_MORE);
-        if(pref_SeeMore != null && pref_SeeMore.getValue() != null
+        if (pref_SeeMore != null && pref_SeeMore.getValue() != null
                 && pref_SeeMore.getValue().equals("on")) {
             mListMenu.setPreferenceEnabled(
-                    CameraSettings.KEY_VIDEO_CDS_MODE,false);
+                    CameraSettings.KEY_VIDEO_CDS_MODE, false);
             mListMenu.setPreferenceEnabled(
                     CameraSettings.KEY_VIDEO_TNR_MODE, false);
             mListMenu.setPreferenceEnabled(
@@ -736,9 +650,9 @@ public class VideoMenu extends MenuController
             mPrevSavedVideoCDS = cds;
         }
 
-        if ((tnr != null) && !tnr.equals("off")) { 
+        if ((tnr != null) && !tnr.equals("off")) {
             mListMenu.setPreferenceEnabled(
-                    CameraSettings.KEY_VIDEO_CDS_MODE,false);
+                    CameraSettings.KEY_VIDEO_CDS_MODE, false);
             mListMenu.overrideSettings(
                     CameraSettings.KEY_VIDEO_CDS_MODE,
                     mActivity.getString(R.string.pref_camera_video_cds_value_off));
@@ -751,7 +665,7 @@ public class VideoMenu extends MenuController
             }
         } else if (tnr != null) {
             mListMenu.setPreferenceEnabled(
-                    CameraSettings.KEY_VIDEO_CDS_MODE,true);
+                    CameraSettings.KEY_VIDEO_CDS_MODE, true);
             if (mIsVideoTNREnabled) {
                 mListMenu.overrideSettings(
                         CameraSettings.KEY_VIDEO_CDS_MODE, mPrevSavedVideoCDS);
@@ -773,7 +687,7 @@ public class VideoMenu extends MenuController
         String videoHDR = videoHDRPref == null ? "off" : videoHDRPref.getValue();
         String frameIntervalStr = frameIntervalPref.getValue();
         int timeLapseInterval = Integer.parseInt(frameIntervalStr);
-        int PERSIST_EIS_MAX_FPS =  android.os.SystemProperties
+        int PERSIST_EIS_MAX_FPS = android.os.SystemProperties
                 .getInt("persist.camcorder.eis.maxfps", 30);
         ListPreference hfrPref = mPreferenceGroup
                 .findPreference(CameraSettings.KEY_VIDEO_HIGH_FRAME_RATE);
@@ -784,10 +698,10 @@ public class VideoMenu extends MenuController
         } else {
             highFrameRate = hfrPref.getValue();
         }
-        boolean isHFR = "hfr".equals(highFrameRate.substring(0,3));
-        boolean isHSR = "hsr".equals(highFrameRate.substring(0,3));
+        boolean isHFR = "hfr".equals(highFrameRate.substring(0, 3));
+        boolean isHSR = "hsr".equals(highFrameRate.substring(0, 3));
         int rate = 0;
-        if ( isHFR || isHSR ) {
+        if (isHFR || isHSR) {
             String hfrRate = highFrameRate.substring(3);
             rate = Integer.parseInt(hfrRate);
         }
@@ -796,6 +710,8 @@ public class VideoMenu extends MenuController
                 || !videoHDR.equals("off")
                 || timeLapseInterval != 0) {
             mListMenu.setPreferenceEnabled(CameraSettings.KEY_VIDEO_HIGH_FRAME_RATE, false);
+            RotateTextToast.makeText(mActivity, R.string.error_app_unsupported_hfr_selection,
+                    Toast.LENGTH_LONG).show();
         }
 
     }
@@ -852,6 +768,7 @@ public class VideoMenu extends MenuController
     public void hideUI() {
         mFrontBackSwitcher.setVisibility(View.INVISIBLE);
         mFilterModeSwitcher.setVisibility(View.INVISIBLE);
+        mGridSwitcher.setVisibility(View.INVISIBLE);
     }
 
     public void showUI() {
@@ -861,6 +778,7 @@ public class VideoMenu extends MenuController
         if (pref != null) {
             mFilterModeSwitcher.setVisibility(View.VISIBLE);
         }
+        mGridSwitcher.setVisibility(View.VISIBLE);
     }
 
     @Override

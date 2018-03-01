@@ -63,8 +63,6 @@ public interface CameraModule {
 
     public void onOrientationChanged(int orientation);
 
-    public void onShowSwitcherPopup();
-
     public void onMediaSaveServiceConnected(MediaSaveService s);
 
     public boolean arePreviewControlsVisible();
@@ -78,4 +76,6 @@ public interface CameraModule {
     public void enableRecordingLocation(boolean enable);
 
     public void setPreferenceForTest(String key, String value);
+
+    public boolean delayAppExitToSaveImage();
 }

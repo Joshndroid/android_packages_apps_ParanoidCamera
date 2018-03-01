@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 The Android Open Source Project
+ * Copyright (C) 2017 Paranoid Android
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +17,7 @@
 
 package com.android.camera;
 
-import android.os.Parcel;
-import android.os.Parcelable;
+import android.content.pm.ActivityInfo;
 import android.view.Display;
 import android.graphics.Point;
 import android.Manifest;
@@ -34,7 +34,6 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.SharedPreferences;
-import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.database.Cursor;
@@ -50,7 +49,6 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Shader;
-import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.media.ThumbnailUtils;
@@ -66,6 +64,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.PowerManager;
 import android.os.PowerManager.WakeLock;
+import android.os.SystemClock;
 import android.os.SystemProperties;
 import android.preference.PreferenceManager;
 import android.provider.MediaStore;
@@ -77,6 +76,7 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.MotionEvent;
 import android.view.OrientationEventListener;
+import android.view.Surface;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -107,6 +107,7 @@ import com.android.camera.ui.ModuleSwitcher;
 import com.android.camera.ui.DetailsDialog;
 import com.android.camera.ui.FilmStripView;
 import com.android.camera.ui.FilmStripView.ImageData;
+import com.android.camera.ui.GridView;
 import com.android.camera.ui.PanoCaptureProcessView;
 import com.android.camera.ui.RotateTextToast;
 import com.android.camera.util.ApiHelper;
@@ -114,10 +115,13 @@ import com.android.camera.util.CameraUtil;
 import com.android.camera.util.GcamHelper;
 import com.android.camera.util.IntentHelper;
 import com.android.camera.util.PersistUtil;
-import com.android.camera.util.PhotoSphereHelper;
 import com.android.camera.util.PhotoSphereHelper.PanoramaViewHelper;
 import com.android.camera.util.UsageStatistics;
-import org.codeaurora.snapcam.R;
+import co.paranoidandroid.camera.R;
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.GlideBuilder;
+import com.bumptech.glide.MemoryCategory;
+import com.bumptech.glide.load.engine.executor.FifoPriorityThreadPoolExecutor;
 
 import java.io.File;
 import java.io.IOException;
@@ -126,7 +130,6 @@ import static com.android.camera.CameraManager.CameraOpenErrorCallback;
 
 public class CameraActivity extends Activity
         implements ModuleSwitcher.ModuleSwitchListener,
-        ActionBar.OnMenuVisibilityListener,
         ShareActionProvider.OnShareTargetSelectedListener {
 
     private static final String TAG = "CAM_Activity";
@@ -135,10 +138,10 @@ public class CameraActivity extends Activity
             "android.media.action.STILL_IMAGE_CAMERA_SECURE";
     public static final String ACTION_IMAGE_CAPTURE_SECURE =
             "android.media.action.IMAGE_CAPTURE_SECURE";
-    public static final String ACTION_TRIM_VIDEO =
+    private static final String ACTION_TRIM_VIDEO =
             "com.android.camera.action.TRIM";
-    public static final String MEDIA_ITEM_PATH = "media-item-path";
-    public static final String KEY_TOTAL_NUMBER = "total-number";
+    private static final String MEDIA_ITEM_PATH = "media-item-path";
+    private static final String KEY_TOTAL_NUMBER = "total-number";
 
     // Used to show whether Gallery was launched from Snapcam
     private static final String KEY_FROM_SNAPCAM = "from-snapcam";
@@ -147,12 +150,12 @@ public class CameraActivity extends Activity
     // should only show newly captured pictures. sSecureAlbumId does not
     // increment. This is used when switching between camera, camcorder, and
     // panorama. If the extra is not set, it is in the normal camera mode.
-    public static final String SECURE_CAMERA_EXTRA = "secure_camera";
+    private static final String SECURE_CAMERA_EXTRA = "secure_camera";
 
     // This string is used for judge start activity from screenoff or not
-    public static final String GESTURE_CAMERA_NAME = "com.android.camera.CameraGestureActivity";
+    private static final String GESTURE_CAMERA_NAME = "com.android.camera.CameraGestureActivity";
 
-    private static final String AUTO_TEST_INTENT ="com.android.camera.autotest";
+    private static final String AUTO_TEST_INTENT = "com.android.camera.autotest";
 
     /**
      * Request code from an activity we started that indicated that we do not
@@ -167,10 +170,14 @@ public class CameraActivity extends Activity
 
     private static final int SWITCH_SAVE_PATH = 2;
 
-    /** Permission request code */
+    /**
+     * Permission request code
+     */
     private static final int PERMISSIONS_REQUEST_ACCESS_COARSE_LOCATION = 1;
 
-    /** Whether onResume should reset the view to the preview. */
+    /**
+     * Whether onResume should reset the view to the preview.
+     */
     private boolean mResetToPreviewOnResume = true;
 
     // Supported operations at FilmStripView. Different data has different
@@ -188,12 +195,16 @@ public class CameraActivity extends Activity
     private static final int SUPPORT_ALL = 0xffffffff;
 
     // Pie Setting Menu enabled
-    private static boolean PIE_MENU_ENABLED = false;
+    private final static boolean PIE_MENU_ENABLED = false;
     private boolean mDeveloperMenuEnabled = false;
 
-    /** This data adapter is used by FilmStripView. */
+    /**
+     * This data adapter is used by FilmStripView.
+     */
     private LocalDataAdapter mDataAdapter;
-    /** This data adapter represents the real local camera data. */
+    /**
+     * This data adapter represents the real local camera data.
+     */
     private LocalDataAdapter mWrappedDataAdapter;
 
     private PanoramaStitchingManager mPanoramaManager;
@@ -206,11 +217,11 @@ public class CameraActivity extends Activity
     private CaptureModule mCaptureModule;
     private PanoCaptureModule mPano2Module;
     private FrameLayout mAboveFilmstripControlLayout;
-    private FrameLayout mCameraRootFrame;
     private View mCameraPhotoModuleRootView;
     private View mCameraVideoModuleRootView;
     private View mCameraPanoModuleRootView;
     private View mCameraCaptureModuleRootView;
+    private GridView mCameraGridView;
     private FilmStripView mFilmStripView;
     private ProgressBar mBottomProgress;
     private View mPanoStitchingPanel;
@@ -225,16 +236,13 @@ public class CameraActivity extends Activity
     private Handler mMainHandler;
     private PanoramaViewHelper mPanoramaViewHelper;
     private CameraPreviewData mCameraPreviewData;
-    private ActionBar mActionBar;
-    private OnActionBarVisibilityListener mOnActionBarVisibilityListener = null;
     private Menu mActionBarMenu;
     private ViewGroup mUndoDeletionBar;
     private boolean mIsUndoingDeletion = false;
     private boolean mIsEditActivityInProgress = false;
-    private View mPreviewCover;
-    private FrameLayout mPreviewContentLayout;
     private boolean mPaused = true;
     private boolean mForceReleaseCamera = false;
+    private boolean mRedrawing = false;
 
     private Uri[] mNfcPushUris = new Uri[1];
 
@@ -254,12 +262,11 @@ public class CameraActivity extends Activity
     public static int SETTING_LIST_WIDTH_1 = 250;
     public static int SETTING_LIST_WIDTH_2 = 250;
 
+    private boolean mGridEnabled;
+
     private ImageView mThumbnail;
     private UpdateThumbnailTask mUpdateThumbnailTask;
     private CircularDrawable mThumbnailDrawable;
-    // FilmStripView.setDataAdapter fires 2 onDataLoaded calls before any data is actually loaded
-    // Keep track of data request here to avoid creating useless UpdateThumbnailTask.
-    private boolean mDataRequested;
     private Cursor mCursor;
 
     private boolean mAutoTestEnabled = false;
@@ -353,28 +360,8 @@ public class CameraActivity extends Activity
         registerReceiver(mSDcardMountedReceiver, filter);
     }
 
-    private class MainHandler extends Handler {
-        public MainHandler(Looper looper) {
-            super(looper);
-        }
-
-        @Override
-        public void handleMessage(Message msg) {
-            if (msg.what == HIDE_ACTION_BAR) {
-                removeMessages(HIDE_ACTION_BAR);
-                CameraActivity.this.setSystemBarsVisibility(false);
-            }else if ( msg.what == SWITCH_SAVE_PATH ) {
-                mCurrentModule.onSwitchSavePath();
-            }
-        }
-    }
-
     public interface OnActionBarVisibilityListener {
         public void onActionBarVisibilityChanged(boolean isVisible);
-    }
-
-    public void setOnActionBarVisibilityListener(OnActionBarVisibilityListener listener) {
-        mOnActionBarVisibilityListener = listener;
     }
 
     public static boolean isPieMenuEnabled() {
@@ -419,18 +406,8 @@ public class CameraActivity extends Activity
                 @Override
                 public void onDataFullScreenChange(int dataID, boolean full) {
                     boolean isCameraID = isCameraPreview(dataID);
-                    if (full && isCameraID && CameraActivity.this.hasWindowFocus()){
+                    if (full && isCameraID && CameraActivity.this.hasWindowFocus()) {
                         updateStorageSpaceAndHint();
-                    }
-                    if (!isCameraID) {
-                        if (!full) {
-                            // Always show action bar in filmstrip mode
-                            CameraActivity.this.setSystemBarsVisibility(true, false);
-                        } else if (mActionBar.isShowing()) {
-                            // Hide action bar after time out in full screen mode
-                            mMainHandler.sendEmptyMessageDelayed(HIDE_ACTION_BAR,
-                                    SHOW_ACTION_BAR_TIMEOUT_MS);
-                        }
                     }
                 }
 
@@ -454,7 +431,6 @@ public class CameraActivity extends Activity
                 @Override
                 public void onReload() {
                     setPreviewControlsVisibility(true);
-                    CameraActivity.this.setSystemBarsVisibility(false);
                 }
 
                 @Override
@@ -464,9 +440,8 @@ public class CameraActivity extends Activity
                         return;
                     }
 
-                    if(!arePreviewControlsVisible()) {
+                    if (!arePreviewControlsVisible()) {
                         setPreviewControlsVisibility(true);
-                        CameraActivity.this.setSystemBarsVisibility(false);
                         mFilmStripView.getController().goToFullScreen();
                     }
                 }
@@ -487,19 +462,13 @@ public class CameraActivity extends Activity
                 public void onDataFocusChanged(final int dataID, final boolean focused) {
                     boolean isPreview = isCameraPreview(dataID);
                     boolean isFullScreen = mFilmStripView.inFullScreen();
-                    if (isFullScreen && isPreview && CameraActivity.this.hasWindowFocus()){
+                    if (isFullScreen && isPreview && CameraActivity.this.hasWindowFocus()) {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
                                 updateStorageSpaceAndHint();
                             }
                         });
-                    }
-                    // Delay hiding action bar if there is any user interaction
-                    if (mMainHandler.hasMessages(HIDE_ACTION_BAR)) {
-                        mMainHandler.removeMessages(HIDE_ACTION_BAR);
-                        mMainHandler.sendEmptyMessageDelayed(HIDE_ACTION_BAR,
-                                SHOW_ACTION_BAR_TIMEOUT_MS);
                     }
                     // TODO: This callback is UI event callback, should always
                     // happen on UI thread. Find the reason for this
@@ -518,14 +487,10 @@ public class CameraActivity extends Activity
                             if (!focused) {
                                 if (isCameraID) {
                                     mCurrentModule.onPreviewFocusChanged(false);
-                                    CameraActivity.this.setSystemBarsVisibility(true);
                                 }
                                 hidePanoStitchingProgress();
                             } else {
                                 if (isCameraID) {
-                                    // Don't show the action bar in Camera
-                                    // preview.
-                                    CameraActivity.this.setSystemBarsVisibility(false);
 
                                     if (mPendingDeletion) {
                                         performDeletion();
@@ -554,22 +519,10 @@ public class CameraActivity extends Activity
 
                 @Override
                 public void onToggleSystemDecorsVisibility(int dataID) {
-                    // If action bar is showing, hide it immediately, otherwise
-                    // show action bar and hide it later
-                    if (mActionBar.isShowing()) {
-                        CameraActivity.this.setSystemBarsVisibility(false);
-                    } else {
-                        // Don't show the action bar if that is the camera preview.
-                        boolean isCameraID = isCameraPreview(dataID);
-                        if (!isCameraID) {
-                            CameraActivity.this.setSystemBarsVisibility(true, true);
-                        }
-                    }
                 }
 
                 @Override
                 public void setSystemDecorsVisibility(boolean visible) {
-                    CameraActivity.this.setSystemBarsVisibility(visible);
                 }
             };
 
@@ -606,7 +559,7 @@ public class CameraActivity extends Activity
             intent.setAction(Intent.ACTION_VIEW);
             intent.setData(uri);
             intent.putExtra(KEY_FROM_SNAPCAM, true);
-            intent.putExtra(KEY_TOTAL_NUMBER, (adapter.getTotalNumber() -1));
+            intent.putExtra(KEY_TOTAL_NUMBER, (adapter.getTotalNumber() - 1));
             startActivity(intent);
         } catch (ActivityNotFoundException ex) {
             try {
@@ -617,53 +570,6 @@ public class CameraActivity extends Activity
             } catch (ActivityNotFoundException e) {
                 Log.w(TAG, "No Activity could be found to open image or video");
             }
-        }
-    }
-
-    /**
-     * If {@param visible} is false, this hides the action bar and switches the system UI
-     * to lights-out mode.
-     */
-    // TODO: This should not be called outside of the activity.
-    public void setSystemBarsVisibility(boolean visible) {
-        setSystemBarsVisibility(visible, false);
-    }
-
-    /**
-     * If {@param visible} is false, this hides the action bar and switches the
-     * system UI to lights-out mode. If {@param hideLater} is true, a delayed message
-     * will be sent after a timeout to hide the action bar.
-     */
-    private void setSystemBarsVisibility(boolean visible, boolean hideLater) {
-        mMainHandler.removeMessages(HIDE_ACTION_BAR);
-
-        View decorView = getWindow().getDecorView();
-        int currentSystemUIVisibility = decorView.getSystemUiVisibility();
-        int systemUIVisibility = DEFAULT_SYSTEM_UI_VISIBILITY;
-        int systemUINotVisible = View.SYSTEM_UI_FLAG_LOW_PROFILE | View.SYSTEM_UI_FLAG_FULLSCREEN;
-
-        int newSystemUIVisibility = systemUIVisibility
-                | (visible ? View.SYSTEM_UI_FLAG_VISIBLE : systemUINotVisible);
-
-        if (newSystemUIVisibility != currentSystemUIVisibility) {
-            decorView.setSystemUiVisibility(newSystemUIVisibility);
-        }
-
-        boolean currentActionBarVisibility = mActionBar.isShowing();
-        if (visible != currentActionBarVisibility) {
-            if (visible) {
-                mActionBar.show();
-            } else {
-                mActionBar.hide();
-            }
-            if (mOnActionBarVisibilityListener != null) {
-                mOnActionBarVisibilityListener.onActionBarVisibilityChanged(visible);
-            }
-        }
-
-        // Now delay hiding the bars
-        if (visible && hideLater) {
-            mMainHandler.sendEmptyMessageDelayed(HIDE_ACTION_BAR, SHOW_ACTION_BAR_TIMEOUT_MS);
         }
     }
 
@@ -751,7 +657,7 @@ public class CameraActivity extends Activity
                     mThumbnail.setVisibility(View.GONE);
                 }
             }
-       }
+        }
     }
 
     public void updateThumbnail(ImageView thumbnail) {
@@ -809,8 +715,7 @@ public class CameraActivity extends Activity
             String path = getPathFromUri(uri);
             if (path == null) {
                 return null;
-            }
-            else {
+            } else {
                 if (img.isPhoto()) {
                     return decodeImageCenter(path);
                 } else {
@@ -837,7 +742,7 @@ public class CameraActivity extends Activity
 
         @Override
         protected void onCancelled(Bitmap bitmap) {
-            if(bitmap != null)
+            if (bitmap != null)
                 bitmap.recycle();
 
             bitmap = null;
@@ -1032,15 +937,6 @@ public class CameraActivity extends Activity
     }
 
     @Override
-    public void onMenuVisibilityChanged(boolean isVisible) {
-        // If menu is showing, we need to make sure action bar does not go away.
-        mMainHandler.removeMessages(HIDE_ACTION_BAR);
-        if (!isVisible) {
-            mMainHandler.sendEmptyMessageDelayed(HIDE_ACTION_BAR, SHOW_ACTION_BAR_TIMEOUT_MS);
-        }
-    }
-
-    @Override
     public boolean onShareTargetSelected(ShareActionProvider shareActionProvider, Intent intent) {
         int currentDataId = mFilmStripView.getCurrentId();
         if (currentDataId < 0) {
@@ -1192,7 +1088,7 @@ public class CameraActivity extends Activity
                 public void onTaskProgress(String filePath, Uri imageUri, int progress) {
                     // Do nothing
                 }
-    };
+            };
 
     private ImageTaskManager.TaskListener mStitchingListener =
             new ImageTaskManager.TaskListener() {
@@ -1443,13 +1339,13 @@ public class CameraActivity extends Activity
                 String key = intent.getExtras().getString("KEY");
                 String value = intent.getExtras().getString("VALUE");
                 if (mCurrentModule != null) {
-                    mCurrentModule.setPreferenceForTest(key,value);
+                    mCurrentModule.setPreferenceForTest(key, value);
                 }
             }
         }
     };
 
-    private  void registerAutoTestReceiver() {
+    private void registerAutoTestReceiver() {
         IntentFilter filter = new IntentFilter(AUTO_TEST_INTENT);
         registerReceiver(mAutoTestReceiver, filter);
     }
@@ -1457,6 +1353,22 @@ public class CameraActivity extends Activity
     @Override
     public void onCreate(Bundle state) {
         super.onCreate(state);
+
+        // Do not draw UI until rotation animation has finished
+        final int orientation = getScreenOrientation();
+        if (orientation != ActivityInfo.SCREEN_ORIENTATION_PORTRAIT &&
+                orientation != ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT) {
+            mRedrawing = true;
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            return;
+        }
+        if (mRedrawing) {
+            mRedrawing = false;
+        }
+
+        final boolean useHal3 = getResources().getBoolean(R.bool.config_use_hal3);
+        CameraManagerFactory.getAndroidCameraManager().setHal3(useHal3);
+
         // Check if this is in the secure camera mode.
         Intent intent = getIntent();
         String action = intent.getAction();
@@ -1501,13 +1413,13 @@ public class CameraActivity extends Activity
 
         LayoutInflater inflater = getLayoutInflater();
         View rootLayout = inflater.inflate(R.layout.camera, null, false);
-        mCameraRootFrame = (FrameLayout)rootLayout.findViewById(R.id.camera_root_frame);
         mCameraPhotoModuleRootView = rootLayout.findViewById(R.id.camera_photo_root);
         mCameraVideoModuleRootView = rootLayout.findViewById(R.id.camera_video_root);
         mCameraPanoModuleRootView = rootLayout.findViewById(R.id.camera_pano_root);
         mCameraCaptureModuleRootView = rootLayout.findViewById(R.id.camera_capture_root);
+        mCameraGridView = (GridView) rootLayout.findViewById(R.id.grid_lines);
 
-        int moduleIndex = -1;
+        int moduleIndex;
         if (MediaStore.INTENT_ACTION_VIDEO_CAMERA.equals(getIntent().getAction())
                 || MediaStore.ACTION_VIDEO_CAPTURE.equals(getIntent().getAction())) {
             moduleIndex = ModuleSwitcher.VIDEO_MODULE_INDEX;
@@ -1541,17 +1453,17 @@ public class CameraActivity extends Activity
 
         mOrientationListener = new MyOrientationEventListener(this);
         setContentView(R.layout.camera_filmstrip);
+
         mFilmStripView = (FilmStripView) findViewById(R.id.filmstrip_view);
         setModuleFromIndex(moduleIndex);
 
-        mActionBar = getActionBar();
-        mActionBar.addOnMenuVisibilityListener(this);
+        getActionBar().hide();
 
         if (ApiHelper.HAS_ROTATION_ANIMATION) {
             setRotationAnimation();
         }
 
-        mMainHandler = new MainHandler(getMainLooper());
+        mMainHandler = new Handler(getMainLooper());
 
         mAboveFilmstripControlLayout =
                 (FrameLayout) findViewById(R.id.camera_above_filmstrip_layout);
@@ -1569,8 +1481,7 @@ public class CameraActivity extends Activity
                 FilmStripView.ImageData.SIZE_FULL);
         // Put a CameraPreviewData at the first position.
         mWrappedDataAdapter = new FixedFirstDataAdapter(
-                new CameraDataAdapter(new ColorDrawable(
-                        getResources().getColor(R.color.photo_placeholder))),
+                new CameraDataAdapter(R.color.photo_placeholder),
                 mCameraPreviewData);
 
         mFilmStripView.setViewGap(
@@ -1586,13 +1497,12 @@ public class CameraActivity extends Activity
             mFilmStripView.setDataAdapter(mDataAdapter);
             if (!isCaptureIntent()) {
                 mDataAdapter.requestLoad(getContentResolver());
-                mDataRequested = true;
             }
         } else {
             // Put a lock placeholder as the last image by setting its date to
             // 0.
             ImageView v = (ImageView) getLayoutInflater().inflate(
-                    R.layout.secure_album_placeholder, null);
+                    R.layout.secure_album_placeholder, null, false);
             v.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View view) {
@@ -1635,12 +1545,10 @@ public class CameraActivity extends Activity
 
         Display display = getWindowManager().getDefaultDisplay();
         Point size = new Point();
-        display.getSize(size);
+        display.getRealSize(size);
         int width = size.x;
         int height = size.y;
-
         int lower = Math.min(width, height);
-
         int offset = lower * 7 / 100;
         SETTING_LIST_WIDTH_1 = lower / 2 + offset;
         SETTING_LIST_WIDTH_2 = lower / 2 - offset;
@@ -1651,14 +1559,41 @@ public class CameraActivity extends Activity
         if (mAutoTestEnabled) {
             registerAutoTestReceiver();
         }
+
+        if (!Glide.isSetup()) {
+            Glide.setup(new GlideBuilder(getApplicationContext())
+                    .setResizeService(new FifoPriorityThreadPoolExecutor(2)));
+            Glide.get(getApplicationContext()).setMemoryCategory(MemoryCategory.HIGH);
+        }
+    }
+
+    private int getScreenOrientation() {
+        final int rotation = getWindowManager().getDefaultDisplay().getRotation();
+        final int orientation = getResources().getConfiguration().orientation;
+
+        if (orientation == Configuration.ORIENTATION_PORTRAIT) {
+            if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_270) {
+                return ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
+            } else {
+                return ActivityInfo.SCREEN_ORIENTATION_REVERSE_PORTRAIT;
+            }
+        }
+
+        if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            if (rotation == Surface.ROTATION_0 || rotation == Surface.ROTATION_90) {
+                return ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
+            } else {
+                return ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
+            }
+        }
+
+        return ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED;
     }
 
     private void setRotationAnimation() {
-        int rotationAnimation = WindowManager.LayoutParams.ROTATION_ANIMATION_ROTATE;
-        rotationAnimation = WindowManager.LayoutParams.ROTATION_ANIMATION_CROSSFADE;
         Window win = getWindow();
         WindowManager.LayoutParams winParams = win.getAttributes();
-        winParams.rotationAnimation = rotationAnimation;
+        winParams.rotationAnimation = WindowManager.LayoutParams.ROTATION_ANIMATION_CROSSFADE;
         win.setAttributes(winParams);
     }
 
@@ -1676,26 +1611,40 @@ public class CameraActivity extends Activity
         if (mFilmStripView.checkSendToModeView(ev)) {
             result = mFilmStripView.sendToModeView(ev);
         }
-        if (result == false)
+        if (!result) {
             result = super.dispatchTouchEvent(ev);
+        }
         if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
             // Real deletion is postponed until the next user interaction after
             // the gesture that triggers deletion. Until real deletion is performed,
             // users can click the undo button to bring back the image that they
             // chose to delete.
             if (mPendingDeletion && !mIsUndoingDeletion) {
-                 performDeletion();
+                performDeletion();
             }
         }
         return result;
     }
 
+    private void waitForImageSave() {
+        long startTime = System.currentTimeMillis();
+        while (mCurrentModule.delayAppExitToSaveImage()) {
+            SystemClock.sleep(20);
+            long timeNow = System.currentTimeMillis();
+            if ((timeNow - startTime) > 5000) {
+                Log.e(TAG, "Couldn't save photo! Timed out after trying for 5000ms");
+                break;
+            }
+        }
+    }
+
     @Override
     public void onPause() {
-        if (mSecureCamera && !hasCriticalPermissions()) {
+        if (mSecureCamera && !hasCriticalPermissions() || mRedrawing) {
             super.onPause();
             return;
         }
+        waitForImageSave();
         // Delete photos that are pending deletion
         performDeletion();
         mOrientationListener.disable();
@@ -1713,27 +1662,20 @@ public class CameraActivity extends Activity
         if (requestCode == REQ_CODE_DONT_SWITCH_TO_PREVIEW) {
             mResetToPreviewOnResume = false;
             mIsEditActivityInProgress = false;
-        } else if (requestCode == REFOCUS_ACTIVITY_CODE)  {
-            if(resultCode == RESULT_OK) {
+        } else if (requestCode == REFOCUS_ACTIVITY_CODE) {
+            if (resultCode == RESULT_OK) {
                 mCaptureModule.setRefocusLastTaken(false);
             }
-        } else if (requestCode == BestpictureActivity.BESTPICTURE_ACTIVITY_CODE)  {
-            if(resultCode == RESULT_OK) {
+        } else if (requestCode == BestpictureActivity.BESTPICTURE_ACTIVITY_CODE) {
+            if (resultCode == RESULT_OK) {
                 byte[] jpeg = data.getByteArrayExtra("thumbnail");
-                if(jpeg != null) {
+                if (jpeg != null) {
                     updateThumbnail(jpeg);
                 }
             }
         } else {
             super.onActivityResult(requestCode, resultCode, data);
         }
-    }
-
-    @Override
-    public void onWindowFocusChanged(boolean focus) {
-        // Hide action bar first since we are in full screen mode first, and
-        // switch the system UI to lights-out mode.
-        if (focus) this.setSystemBarsVisibility(false);
     }
 
     /**
@@ -1745,20 +1687,14 @@ public class CameraActivity extends Activity
      * Non-critical permission is location.
      */
     private boolean hasCriticalPermissions() {
-        boolean hasCriticalPermission = false;
-        if (checkSelfPermission(Manifest.permission.CAMERA) ==
-                        PackageManager.PERMISSION_GRANTED &&
+        return checkSelfPermission(Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED &&
                 checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
                         PackageManager.PERMISSION_GRANTED &&
                 checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
                         PackageManager.PERMISSION_GRANTED &&
                 checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) ==
-                        PackageManager.PERMISSION_GRANTED) {
-            hasCriticalPermission = true;
-        } else {
-            hasCriticalPermission = false;
-        }
-        return hasCriticalPermission;
+                        PackageManager.PERMISSION_GRANTED;
     }
 
     private boolean isStartRequsetPermission() {
@@ -1766,7 +1702,7 @@ public class CameraActivity extends Activity
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
         boolean isRequestShown = prefs.getBoolean(CameraSettings.KEY_REQUEST_PERMISSION, false);
 
-        if(!mSecureCamera && (!isRequestShown || !hasCriticalPermissions())) {
+        if (!mSecureCamera && (!isRequestShown || !hasCriticalPermissions())) {
             Log.v(TAG, "Start Request Permission");
             Intent intent = new Intent(this, PermissionsActivity.class);
             intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -1781,6 +1717,10 @@ public class CameraActivity extends Activity
 
     @Override
     public void onResume() {
+        if (mRedrawing) {
+            super.onResume();
+            return;
+        }
         if (mSecureCamera && !hasCriticalPermissions()) {
             super.onResume();
             showOpenCameraErrorDialog();
@@ -1792,13 +1732,19 @@ public class CameraActivity extends Activity
             finish();
             return;
         }
+
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+
         SettingsManager settingsManager = SettingsManager.getInstance();
         if (settingsManager == null) {
             SettingsManager.createInstance(this);
         }
-        // Hide action bar first since we are in full screen mode first, and
-        // switch the system UI to lights-out mode.
-        this.setSystemBarsVisibility(false);
 
         UsageStatistics.onEvent(UsageStatistics.COMPONENT_CAMERA,
                 UsageStatistics.ACTION_FOREGROUNDED, this.getClass().getSimpleName());
@@ -1832,11 +1778,11 @@ public class CameraActivity extends Activity
         mLocalImagesObserver.setActivityPaused(false);
         mLocalVideosObserver.setActivityPaused(false);
 
-        //This is a temporal solution to share LED resource
-        //as Android doesn’t have any default intent to share the state.
+        // This is a temporal solution to share LED resource
+        // as Android doesn’t have any default intent to share the state.
         // if the led flash light is open, turn it off
         Log.d(TAG, "send the turn off Flashlight broadcast");
-        Intent intent = new Intent("org.codeaurora.snapcam.action.CLOSE_FLASHLIGHT");
+        Intent intent = new Intent("co.paranoidandroid.camera.action.CLOSE_FLASHLIGHT");
         intent.putExtra("camera_led", true);
         sendBroadcast(intent);
     }
@@ -1844,20 +1790,24 @@ public class CameraActivity extends Activity
     @Override
     public void onStart() {
         super.onStart();
-        if (mSecureCamera && !hasCriticalPermissions()) {
+        if (mSecureCamera && !hasCriticalPermissions() || mRedrawing) {
             return;
         }
         bindMediaSaveService();
-        mPanoramaViewHelper.onStart();
+        if (mPanoramaViewHelper != null) {
+            mPanoramaViewHelper.onStart();
+        }
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        if (mSecureCamera && !hasCriticalPermissions()) {
+        if (mSecureCamera && !hasCriticalPermissions() || mRedrawing) {
             return;
         }
-        mPanoramaViewHelper.onStop();
+        if (mPanoramaViewHelper != null) {
+            mPanoramaViewHelper.onStop();
+        }
         unbindMediaSaveService();
     }
 
@@ -1873,12 +1823,12 @@ public class CameraActivity extends Activity
             unregisterReceiver(mSDcardMountedReceiver);
 
             mCursor.close();
-            mCursor=null;
+            mCursor = null;
         }
         if (mAutoTestEnabled) {
             unregisterReceiver(mAutoTestReceiver);
         }
-        if(mCurrentModule != null){
+        if (mCurrentModule != null) {
             mCurrentModule.onDestroy();
         }
         super.onDestroy();
@@ -1908,10 +1858,8 @@ public class CameraActivity extends Activity
 
     @Override
     public boolean onKeyUp(int keyCode, KeyEvent event) {
-        if (mFilmStripView.inCameraFullscreen() && mCurrentModule.onKeyUp(keyCode, event)) {
-            return true;
-        }
-        return super.onKeyUp(keyCode, event);
+        return (mFilmStripView.inCameraFullscreen() && mCurrentModule.onKeyUp(keyCode, event))
+                || super.onKeyUp(keyCode, event);
     }
 
     @Override
@@ -1957,7 +1905,7 @@ public class CameraActivity extends Activity
     protected void updateStorageSpaceAndHint(final OnStorageUpdateDoneListener callback) {
         (new AsyncTask<Void, Void, Long>() {
             @Override
-            protected Long doInBackground(Void ... arg) {
+            protected Long doInBackground(Void... arg) {
                 return updateStorageSpace();
             }
 
@@ -2025,18 +1973,18 @@ public class CameraActivity extends Activity
 
     public void requestLocationPermission() {
         if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION)
-            != PackageManager.PERMISSION_GRANTED) {
+                != PackageManager.PERMISSION_GRANTED) {
             Log.v(TAG, "Request Location permission");
             mCurrentModule.waitingLocationPermissionResult(true);
             requestPermissions(
-                new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
-                PERMISSIONS_REQUEST_ACCESS_COARSE_LOCATION);
+                    new String[]{Manifest.permission.ACCESS_COARSE_LOCATION},
+                    PERMISSIONS_REQUEST_ACCESS_COARSE_LOCATION);
         }
     }
 
     @Override
     public void onRequestPermissionsResult(int requestCode,
-            String permissions[], int[] grantResults) {
+                                           String permissions[], int[] grantResults) {
         switch (requestCode) {
             case PERMISSIONS_REQUEST_ACCESS_COARSE_LOCATION: {
                 // If request is cancelled, the result arrays are empty.
@@ -2100,7 +2048,7 @@ public class CameraActivity extends Activity
         mCurrentModuleIndex = moduleIndex;
         switch (moduleIndex) {
             case ModuleSwitcher.VIDEO_MODULE_INDEX:
-                if(mVideoModule == null) {
+                if (mVideoModule == null) {
                     mVideoModule = new VideoModule();
                     mVideoModule.init(this, mCameraVideoModuleRootView);
                 } else {
@@ -2111,7 +2059,7 @@ public class CameraActivity extends Activity
                 break;
 
             case ModuleSwitcher.PHOTO_MODULE_INDEX:
-                if(mPhotoModule == null) {
+                if (mPhotoModule == null) {
                     mPhotoModule = new PhotoModule();
                     mPhotoModule.init(this, mCameraPhotoModuleRootView);
                 } else {
@@ -2122,16 +2070,18 @@ public class CameraActivity extends Activity
                 break;
 
             case ModuleSwitcher.WIDE_ANGLE_PANO_MODULE_INDEX:
-                if(mPanoModule == null) {
+                if (mPanoModule == null) {
                     mPanoModule = new WideAnglePanoramaModule();
                     mPanoModule.init(this, mCameraPanoModuleRootView);
+                } else {
+                    mPanoModule.reinit();
                 }
                 mCurrentModule = mPanoModule;
                 mCameraPanoModuleRootView.setVisibility(View.VISIBLE);
                 break;
 
             case ModuleSwitcher.CAPTURE_MODULE_INDEX:
-                if(mCaptureModule == null) {
+                if (mCaptureModule == null) {
                     mCaptureModule = new CaptureModule();
                     mCaptureModule.init(this, mCameraCaptureModuleRootView);
                 } else {
@@ -2143,7 +2093,7 @@ public class CameraActivity extends Activity
 
             case ModuleSwitcher.PANOCAPTURE_MODULE_INDEX:
                 final Activity activity = this;
-                if(!PanoCaptureProcessView.isSupportedStatic()) {
+                if (!PanoCaptureProcessView.isSupportedStatic()) {
                     this.runOnUiThread(new Runnable() {
                         public void run() {
                             RotateTextToast.makeText(activity, "Panocapture library is missing", Toast.LENGTH_SHORT).show();
@@ -2164,14 +2114,7 @@ public class CameraActivity extends Activity
             case ModuleSwitcher.GCAM_MODULE_INDEX:  //Unused module for now
             default:
                 // Fall back to photo mode.
-                if(mPhotoModule == null) {
-                    mPhotoModule = new PhotoModule();
-                    mPhotoModule.init(this, mCameraPhotoModuleRootView);
-                } else {
-                    mPhotoModule.reinit();
-                }
-                mCurrentModule = mPhotoModule;
-                mCameraPhotoModuleRootView.setVisibility(View.VISIBLE);
+                setModuleFromIndex(ModuleSwitcher.PHOTO_MODULE_INDEX);
                 break;
         }
     }
@@ -2198,8 +2141,8 @@ public class CameraActivity extends Activity
      * Launch the tiny planet editor.
      *
      * @param data the data must be a 360 degree stereographically mapped
-     *            panoramic image. It will not be modified, instead a new item
-     *            with the result will be added to the filmstrip.
+     *             panoramic image. It will not be modified, instead a new item
+     *             with the result will be added to the filmstrip.
      */
     public void launchTinyPlanetEditor(LocalData data) {
         TinyPlanetFragment fragment = new TinyPlanetFragment();
@@ -2216,6 +2159,7 @@ public class CameraActivity extends Activity
     }
 
     private void closeModule(CameraModule module) {
+        waitForImageSave();
         module.onPauseBeforeSuper();
         module.onPauseAfterSuper();
     }
@@ -2261,7 +2205,7 @@ public class CameraActivity extends Activity
                     if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
                         mIsUndoingDeletion = true;
                     } else if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-                        mIsUndoingDeletion =false;
+                        mIsUndoingDeletion = false;
                     }
                     return false;
                 }
@@ -2308,11 +2252,6 @@ public class CameraActivity extends Activity
         }
     }
 
-    @Override
-    public void onShowSwitcherPopup() {
-        mCurrentModule.onShowSwitcherPopup();
-    }
-
     /**
      * Enable/disable swipe-to-filmstrip. Will always disable swipe if in
      * capture intent.
@@ -2338,8 +2277,8 @@ public class CameraActivity extends Activity
     }
 
     /**
-     * Show or hide the {@link CameraControls} using the current module's
-     * implementation of {@link #onPreviewFocusChanged}.
+     * Show or hide the {@link com.android.camera.ui.CameraControls} using the current module's
+     * implementation of {@link com.android.camera.CameraModule#onPreviewFocusChanged(boolean)}.
      *
      * @param showControls whether to show camera controls.
      */
@@ -2379,8 +2318,8 @@ public class CameraActivity extends Activity
     }
 
     public boolean isRecording() {
-        return (mCurrentModule instanceof VideoModule) ?
-                ((VideoModule) mCurrentModule).isRecording() : false;
+        return (mCurrentModule instanceof VideoModule)
+                && ((VideoModule) mCurrentModule).isRecording();
     }
 
     public CameraOpenErrorCallback getCameraOpenErrorCallback() {
@@ -2400,5 +2339,26 @@ public class CameraActivity extends Activity
             CameraUtil.showErrorAndFinish(CameraActivity.this,
                     R.string.cannot_connect_camera);
         }
+    }
+
+    protected void showGrid(ComboPreferences prefs) {
+        if (prefs != null) {
+            final String value = prefs.getString(CameraSettings.KEY_GRID,
+                    getResources().getString(R.string.pref_camera_grid_default));
+            mGridEnabled = value.equals("on");
+            if (mGridEnabled) {
+                mCameraGridView.setVisibility(View.VISIBLE);
+                return;
+            }
+        }
+        mCameraGridView.setVisibility(View.GONE);
+    }
+
+    protected GridView getGridView() {
+        return mCameraGridView;
+    }
+
+    public boolean isGridEnabled() {
+        return mGridEnabled;
     }
 }

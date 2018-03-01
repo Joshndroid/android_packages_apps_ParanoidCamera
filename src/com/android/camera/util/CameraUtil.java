@@ -63,7 +63,7 @@ import com.android.camera.CameraSettings;
 import com.android.camera.ui.RotateTextToast;
 import com.android.camera.util.IntentHelper;
 
-import org.codeaurora.snapcam.R;
+import co.paranoidandroid.camera.R;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -466,7 +466,7 @@ public class CameraUtil {
     public static boolean isDefaultToPortrait(Activity activity) {
         Display currentDisplay = activity.getWindowManager().getDefaultDisplay();
         Point displaySize = new Point();
-        currentDisplay.getSize(displaySize);
+        currentDisplay.getRealSize(displaySize);
         int orientation = currentDisplay.getRotation();
         int naturalWidth, naturalHeight;
         if (orientation == Surface.ROTATION_0 || orientation == Surface.ROTATION_180) {
@@ -516,7 +516,7 @@ public class CameraUtil {
     }
 
     private static Point getDefaultDisplaySize(Activity activity, Point size) {
-        activity.getWindowManager().getDefaultDisplay().getSize(size);
+        activity.getWindowManager().getDefaultDisplay().getRealSize(size);
         //cap the display resolution given to getOptimalPreviewSize if the below properties
         //are set. For example if the properties are set as below :
         //adb shell setprop camera.display.umax 1920x1080
@@ -1168,15 +1168,15 @@ public class CameraUtil {
         StackTraceElement[] elems = Thread.currentThread().getStackTrace();
         // Ignore the first 3 elements.
         level = (level == 0 ? elems.length : Math.min(level + 3, elems.length));
-        String ret = new String();
+        StringBuilder ret = new StringBuilder();
         for (int i = 3; i < level; i++) {
-            ret = ret + "\t" + elems[i].toString() + '\n';
+            ret.append("\t").append(elems[i].toString()).append('\n');
         }
-        return ret;
+        return ret.toString();
     }
 
-    public static boolean volumeKeyShutterDisable(Context context) {
-        return context.getResources().getBoolean(R.bool.volume_key_shutter_disable);
+    public static boolean volumeKeyForZoom(Context context) {
+        return context.getResources().getBoolean(R.bool.volume_key_for_zoom);
     }
 
     public static int determineRatio(int width, int height) {

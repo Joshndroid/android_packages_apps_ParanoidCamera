@@ -16,15 +16,17 @@
 
 package com.android.camera.ui;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Point;
 import android.graphics.Rect;
 import android.view.ScaleGestureDetector;
 
-import org.codeaurora.snapcam.R;
+import co.paranoidandroid.camera.R;
 
 public class ZoomRenderer extends OverlayRenderer
         implements ScaleGestureDetector.OnScaleGestureListener {
@@ -53,10 +55,16 @@ public class ZoomRenderer extends OverlayRenderer
     private float mZoomMinValue;
     private float mZoomMaxValue;
 
+    private Point mDispSize;
+    private int mCameraControlHeight;
+
     public interface OnZoomChangedListener {
         void onZoomStart();
+
         void onZoomEnd();
+
         void onZoomValueChanged(int index);  // only for immediate zoom
+
         void onZoomValueChanged(float value);
     }
 
@@ -77,6 +85,9 @@ public class ZoomRenderer extends OverlayRenderer
         mMinCircle = res.getDimensionPixelSize(R.dimen.zoom_ring_min);
         mTextBounds = new Rect();
         setVisible(false);
+        mDispSize = new Point();
+        Activity activity = (Activity) ctx;
+        activity.getWindowManager().getDefaultDisplay().getRealSize(mDispSize);
     }
 
     // set from module
@@ -98,7 +109,7 @@ public class ZoomRenderer extends OverlayRenderer
     public void setZoom(float zoomValue) {
         mCamera2 = true;
         mZoomSig = (int) zoomValue;
-        mZoomFraction = (int)(zoomValue * 10) % 10;
+        mZoomFraction = (int) (zoomValue * 10) % 10;
         mCircleSize = (int) (mMinCircle + (mMaxCircle - mMinCircle) * (zoomValue - mZoomMinValue) /
                 (mZoomMaxValue - mZoomMinValue));
     }
@@ -113,11 +124,19 @@ public class ZoomRenderer extends OverlayRenderer
         mListener = listener;
     }
 
+    public void setCameraControlHeight(int height) {
+        mCameraControlHeight = height;
+    }
+
     @Override
     public void layout(int l, int t, int r, int b) {
+        l = 0;
+        t = 0;
+        r = mDispSize.x;
+        b = mDispSize.y - mCameraControlHeight;
         super.layout(l, t, r, b);
         mCenterX = (r - l) / 2;
-        mCenterY = (b - t) / 2;
+        mCenterY = ((b - t) / 2) + t;
         mMaxCircle = Math.min(getWidth(), getHeight());
         mMaxCircle = (mMaxCircle - mMinCircle) / 2;
     }
@@ -137,15 +156,13 @@ public class ZoomRenderer extends OverlayRenderer
         mPaint.setStrokeWidth(mOuterStroke);
         canvas.drawCircle((float) mCenterX, (float) mCenterY,
                 mCircleSize, mPaint);
-        String txt = mZoomSig+"."+mZoomFraction+"x";
+        String txt = mZoomSig + "." + mZoomFraction + "x";
         mTextPaint.getTextBounds(txt, 0, txt.length(), mTextBounds);
         canvas.drawText(txt, mCenterX - mTextBounds.centerX(), mCenterY - mTextBounds.centerY(),
                 mTextPaint);
     }
 
-    @Override
-    public boolean onScale(ScaleGestureDetector detector) {
-        final float sf = detector.getScaleFactor();
+    public boolean setScale(float sf) {
         float circle = mCircleSize * sf * sf;
         circle = Math.max(mMinCircle, circle);
         circle = Math.min(mMaxCircle, circle);
@@ -163,6 +180,11 @@ public class ZoomRenderer extends OverlayRenderer
             update();
         }
         return true;
+    }
+
+    @Override
+    public boolean onScale(ScaleGestureDetector detector) {
+        return setScale(detector.getScaleFactor());
     }
 
     @Override

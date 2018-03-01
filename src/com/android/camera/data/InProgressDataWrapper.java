@@ -25,7 +25,7 @@ import android.view.View;
 import android.widget.FrameLayout;
 
 import com.android.camera.util.PhotoSphereHelper;
-import org.codeaurora.snapcam.R;
+import co.paranoidandroid.camera.R;
 
 /**
  * A wrapper class for in-progress data. Data that's still being processed
@@ -50,8 +50,9 @@ public class InProgressDataWrapper implements LocalData {
     @Override
     public View getView(
             Activity a, int width, int height,
-            Drawable placeHolder, LocalDataAdapter adapter) {
-        View v =  mLocalData.getView(a, width, height, placeHolder, adapter);
+            int placeHolderResourceId, LocalDataAdapter adapter, boolean inFullScreen) {
+        View v =  mLocalData.getView(a, width, height, placeHolderResourceId,
+                adapter, inFullScreen);
 
         if (mHasProgressBar) {
             // Return a framelayout with the progressbar and imageview.

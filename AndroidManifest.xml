@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.codeaurora.snapcam">
+    package="co.paranoidandroid.camera">
 
     <uses-sdk
-        android:minSdkVersion="23"
-        android:targetSdkVersion="23" />
+        android:minSdkVersion="27"
+        android:targetSdkVersion="27" />
 
     <uses-permission android:name="android.permission.INTERACT_ACROSS_USERS_FULL" />
     <uses-permission android:name="android.permission.SET_ORIENTATION" />
@@ -36,16 +36,17 @@
         android:name="com.android.camera.app.CameraApp"
         android:hardwareAccelerated="true"
         android:icon="@mipmap/ic_launcher_camera"
+        android:roundIcon="@mipmap/ic_launcher_camera_round"
         android:label="@string/snapcam_app_name"
         android:largeHeap="true"
         android:logo="@mipmap/ic_launcher_camera"
         android:restoreAnyVersion="true"
-        android:supportsRtl="true"
+        android:supportsRtl="false"
         android:theme="@style/Theme.Camera" >
         <activity
             android:name="com.android.camera.CameraActivity"
             android:clearTaskOnLaunch="true"
-            android:configChanges="orientation|screenSize|keyboardHidden"
+            android:configChanges="screenSize|keyboardHidden"
             android:icon="@mipmap/ic_launcher_camera"
             android:label="@string/snapcam_app_name"
             android:launchMode="singleTask"

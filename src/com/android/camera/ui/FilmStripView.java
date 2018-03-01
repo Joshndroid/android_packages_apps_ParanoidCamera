@@ -48,7 +48,7 @@ import com.android.camera.ui.RenderOverlay;
 import com.android.camera.util.CameraUtil;
 import com.android.camera.util.PhotoSphereHelper.PanoramaViewHelper;
 import com.android.camera.util.UsageStatistics;
-import org.codeaurora.snapcam.R;
+import co.paranoidandroid.camera.R;
 
 import java.util.Arrays;
 
@@ -282,10 +282,11 @@ public class FilmStripView extends ViewGroup implements BottomControlsListener {
          *
          * @param activity The {@link Activity} context to create the view.
          * @param dataID The ID of the image data to be presented.
+         * @param inFullScreen if the filmstrip is in fullscreen
          * @return The view representing the image data. Null if unavailable or
          *         the {@code dataID} is out of range.
          */
-        public View getView(Activity activity, int dataID);
+        public View getView(Activity activity, int dataID, boolean inFullScreen);
 
         /**
          * Returns the {@link ImageData} specified by the ID.
@@ -852,18 +853,6 @@ public class FilmStripView extends ViewGroup implements BottomControlsListener {
                         heightMeasureSpec, MeasureSpec.EXACTLY));
     }
 
-    @Override
-    protected boolean fitSystemWindows(Rect insets) {
-        // Since the camera preview needs this callback to layout the camera
-        // controls correctly, we need to call super here.
-        super.fitSystemWindows(insets);
-        // After calling super, we need to return false because we have other
-        // layouts such as bottom controls that needs this callback. The
-        // framework behavior is to stop propagating this after the first
-        // child returning true is found.
-        return false;
-    }
-
     private int findTheNearestView(int pointX) {
 
         int nearest = 0;
@@ -900,7 +889,7 @@ public class FilmStripView extends ViewGroup implements BottomControlsListener {
             return null;
         }
         data.prepare();
-        View v = mDataAdapter.getView(mActivity, dataID);
+        View v = mDataAdapter.getView(mActivity, dataID, inFullScreen());
         if (v == null) {
             return null;
         }
@@ -1108,7 +1097,6 @@ public class FilmStripView extends ViewGroup implements BottomControlsListener {
         if (mBottomControls == null) {
             mBottomControls = (FilmstripBottomControls) ((View) getParent())
                     .findViewById(R.id.filmstrip_bottom_controls);
-            mActivity.setOnActionBarVisibilityListener(mBottomControls);
             mBottomControls.setListener(this);
         }
 

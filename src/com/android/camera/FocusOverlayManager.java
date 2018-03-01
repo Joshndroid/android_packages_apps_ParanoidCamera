@@ -17,7 +17,9 @@
 package com.android.camera;
 
 import android.annotation.TargetApi;
+import android.content.Context;
 import android.graphics.Matrix;
+import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.hardware.Camera.Area;
@@ -27,7 +29,9 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
+import co.paranoidandroid.camera.R;
 
+import com.android.camera.app.CameraApp;
 import com.android.camera.util.CameraUtil;
 import com.android.camera.util.UsageStatistics;
 
@@ -108,6 +112,9 @@ public class FocusOverlayManager {
         public void resumeFaceDetection();
     }
 
+    private Point mDispSize;
+    private int mCameraControlHeight;
+
     public interface Listener {
         public void autoFocus();
         public void cancelAutoFocus();
@@ -140,7 +147,7 @@ public class FocusOverlayManager {
 
     public FocusOverlayManager(ComboPreferences preferences, String[] defaultFocusModes,
             Parameters parameters, Listener listener,
-            boolean mirror, Looper looper, FocusUI ui) {
+            boolean mirror, Looper looper, FocusUI ui, CameraActivity activity) {
         mHandler = new MainHandler(looper);
         mMatrix = new Matrix();
         mPreferences = preferences;
@@ -149,10 +156,16 @@ public class FocusOverlayManager {
         mListener = listener;
         setMirror(mirror);
         mUI = ui;
+        mDispSize = new Point();
+        activity.getWindowManager().getDefaultDisplay().getRealSize(mDispSize);
     }
 
     public void setPhotoUI(FocusUI ui) {
         mUI = ui;
+    }
+
+    public void setCameraControlHeight(int height) {
+        mCameraControlHeight = height;
     }
 
     public void setParameters(Parameters parameters) {
@@ -284,6 +297,9 @@ public class FocusOverlayManager {
             // sound.
             if (focused) {
                 mState = STATE_SUCCESS;
+                // Lock exposure and white balance
+                setAeAwbLock(true);
+                mListener.setFocusParameters();
             } else {
                 mState = STATE_FAIL;
             }
@@ -295,6 +311,9 @@ public class FocusOverlayManager {
             // take the picture now.
             if (focused) {
                 mState = STATE_SUCCESS;
+                // Lock exposure and white balance
+                setAeAwbLock(true);
+                mListener.setFocusParameters();
             } else {
                 mState = STATE_FAIL;
             }
@@ -384,7 +403,11 @@ public class FocusOverlayManager {
                     mState == STATE_SUCCESS || mState == STATE_FAIL)) {
             cancelAutoFocus();
         }
-        if (mPreviewRect.width() == 0 || mPreviewRect.height() == 0) return;
+        if (mPreviewRect.width() == 0
+                || mPreviewRect.height() == 0
+                || y > mDispSize.y - mCameraControlHeight) {
+            return;
+        }
         // Initialize variables.
         // Initialize mFocusArea.
         if (mFocusAreaSupported) {
@@ -448,6 +471,7 @@ public class FocusOverlayManager {
         // Otherwise, focus mode stays at auto and the tap area passed to the
         // driver is not reset.
         resetTouchFocus();
+        setAeAwbLock(false);
         mListener.cancelAutoFocus();
         mUI.resumeFaceDetection();
         mState = STATE_IDLE;

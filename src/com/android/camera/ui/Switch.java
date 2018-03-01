@@ -39,7 +39,7 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.widget.CompoundButton;
 
-import org.codeaurora.snapcam.R;
+import co.paranoidandroid.camera.R;
 
 /**
  * A Switch is a two-state toggle switch widget that can select between two
@@ -123,7 +123,7 @@ public class Switch extends CompoundButton {
         mSwitchMinWidth = res.getDimensionPixelSize(R.dimen.switch_min_width);
         mSwitchTextMaxWidth = res.getDimensionPixelSize(R.dimen.switch_text_max_width);
         mSwitchPadding = res.getDimensionPixelSize(R.dimen.switch_padding);
-        setSwitchTextAppearance(context, android.R.style.TextAppearance_Holo_Small);
+        setSwitchTextAppearance(context, android.R.style.TextAppearance_Material_Small);
 
         ViewConfiguration config = ViewConfiguration.get(context);
         mTouchSlop = config.getScaledTouchSlop();

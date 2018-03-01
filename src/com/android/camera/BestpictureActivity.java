@@ -42,7 +42,6 @@ import android.os.Bundle;
 import android.support.v13.app.FragmentStatePagerAdapter;
 import android.support.v4.view.PagerAdapter;
 import android.support.v4.view.ViewPager;
-import android.util.Log;
 import android.view.Display;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -64,15 +63,12 @@ import com.android.camera.ui.RotateTextToast;
 import com.android.camera.ui.RotateImageView;
 import com.android.camera.util.CameraUtil;
 
-import org.codeaurora.snapcam.R;
+import co.paranoidandroid.camera.R;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.RandomAccessFile;
-
-import static android.app.Activity.RESULT_OK;
 
 public class BestpictureActivity extends FragmentActivity {
     private static final String TAG = "BestpictureActivity";
@@ -185,7 +181,7 @@ public class BestpictureActivity extends FragmentActivity {
         setContentView(R.layout.bestpicture_editor);
         Display display = getWindowManager().getDefaultDisplay();
         Point size = new Point();
-        display.getSize(size);
+        display.getRealSize(size);
         mWidth = size.x/4;
         mHeight = size.y/4;
         mNamedImages = new PhotoModule.NamedImages();

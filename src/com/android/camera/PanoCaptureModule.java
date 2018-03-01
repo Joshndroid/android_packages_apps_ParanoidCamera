@@ -63,7 +63,7 @@ import com.android.camera.exif.ExifInterface;
 import com.android.camera.ui.RotateTextToast;
 import com.android.camera.util.CameraUtil;
 
-import org.codeaurora.snapcam.R;
+import co.paranoidandroid.camera.R;
 
 import java.io.File;
 import java.io.IOException;
@@ -308,7 +308,7 @@ public class PanoCaptureModule implements CameraModule, PhotoController {
             mCameraSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
             Display display = mActivity.getWindowManager().getDefaultDisplay();
             Point ds = new Point();
-            display.getSize(ds);
+            display.getRealSize(ds);
             mOutputSize = getOutputSize(TARGET_RATIO, map.getOutputSizes(ImageFormat.YUV_420_888), ds.x, ds.y);
             mCameraId = cameraId;
         } catch (CameraAccessException e) {
@@ -421,7 +421,7 @@ public class PanoCaptureModule implements CameraModule, PhotoController {
 
     @Override
     public void onPauseBeforeSuper() {
-        mUI.applySurfaceChange(0, false);
+        mUI.applySurfaceChange(CameraUI.SURFACE_STATUS.HIDE);
     }
 
     @Override
@@ -441,7 +441,7 @@ public class PanoCaptureModule implements CameraModule, PhotoController {
         mUI.onResume();
         openCamera();
         setUpCameraOutputs();
-        mUI.applySurfaceChange(2, false);
+        mUI.applySurfaceChange(CameraUI.SURFACE_STATUS.SURFACE_VIEW);
         mUI.setLayout(mOutputSize);
         startBackgroundThread();
         mUI.enableShutter(true);
@@ -499,6 +499,11 @@ public class PanoCaptureModule implements CameraModule, PhotoController {
         }
         exif.addGpsTags(location.getLatitude(), location.getLongitude());
         exif.setTag(exif.buildTag(ExifInterface.TAG_GPS_PROCESSING_METHOD, location.getProvider()));
+    }
+
+    @Override
+    public boolean delayAppExitToSaveImage() {
+        return false;
     }
 
     @Override
@@ -650,11 +655,6 @@ public class PanoCaptureModule implements CameraModule, PhotoController {
             mOrientation = newOrientation;
             mUI.setOrientation(newOrientation, true);
         }
-    }
-
-    @Override
-    public void onShowSwitcherPopup() {
-
     }
 
     @Override
